@@ -19,7 +19,14 @@ RESET       mov.w   #__STACK_END,SP         ; Initialize stack pointer
 init:
             ; stop watchdog timer
             mov.w   #WDTPW+WDTHOLD,&WDTCTL
-            
+
+setup_port2_for_i2c
+            bic.b   #BIT0, &P2OUT           ; clear P2.0 output
+            bis.b   #BIT0, &P2OUT           ; Setup P2.0 as SCL Line
+
+            bic.b   #BIT2, &P2OUT           ; clear P2.2 output
+            bis.b   #BIT2, &P2OUT           ; Setup P2.2 as SDA Line
+
 setup_P6    bic.b   #BIT6, &P6OUT           ; clear P6.6
             bis.b   #BIT6, &P6DIR           ; P6.6 as output
 
@@ -32,9 +39,10 @@ setup_timer_B0
 	        bis.w	#TBIE, &TB0CTL				; enable overflow interupt
 	        bic.w	#TBIFG, &TB0CTL				; clear interupt flag
 
+
+
             bic.w   #LOCKLPM5,&PM5CTL0       ; Unlock I/O pins
             bis.w	#GIE, SR				; turn on global eables
-
 
             ; Disable low-power mode
             bic.w   #LOCKLPM5,&PM5CTL0
@@ -49,7 +57,7 @@ main:
 ; Interrupt Service Routine 
 ;------------------------------------------------------------------------------
 
-timer_B0_1s:
+timer_B0_1s:        ; subroutine to toggle the green LED every 1 sec
             xor.b   #BIT6, &P6OUT           ; toggle LED2 (green)
             bic.w   #TBIFG, &TB0CTL         ; clear TB0 flag
             reti
