@@ -21,17 +21,22 @@ init:
             mov.w   #WDTPW+WDTHOLD,&WDTCTL
 
 setup_port2_for_i2c
-            bic.b   #BIT0, &P2OUT           ; clear P2.0 output
-            bis.b   #BIT0, &P2OUT           ; Setup P2.0 as SCL Line
+                
+                mov.b   #000, &P2SEL0
+                mov.b   #000, &P2SEL0
+                bis.b   #BIT0, &P2DIR           ; Setup P2.0 as SCL Line
+                bic.b   #BIT0, &P2OUT           ; clear P2.0 output
+                
+                mov.b   #000, &P2SEL0
+                mov.b   #000, &P2SEL1
+                bis.b   #BIT2, &P2DIR           ; Setup P2.2 as SDA Line
+                bic.b   #BIT2, &P2OUT           ; clear P2.2 output
 
-            bic.b   #BIT2, &P2OUT           ; clear P2.2 output
-            bis.b   #BIT2, &P2OUT           ; Setup P2.2 as SDA Line
-
-setup_P6    bic.b   #BIT6, &P6OUT           ; clear P6.6
-            bis.b   #BIT6, &P6DIR           ; P6.6 as output
+setup_P6        bic.b   #BIT6, &P6OUT           ; clear P6.6
+                bis.b   #BIT6, &P6DIR           ; P6.6 as output
 
 setup_timer_B0
-            bis.w	#TBCLR, &TB0CTL				; clear timer and dividers
+                bis.w	#TBCLR, &TB0CTL				; clear timer and dividers
 	        bis.w	#TBSSEL__ACLK, &TB0CTL		; select ACLK as timer source
 	        bis.w	#MC__CONTINUOUS, &TB0CTL	; choose continuous counting
 	        bis.w	#CNTL__12, &TB0CTL			; timer to toggle LED ~ 1sec
@@ -41,14 +46,14 @@ setup_timer_B0
 
 
 
-            bic.w   #LOCKLPM5,&PM5CTL0       ; Unlock I/O pins
+            ;bic.w   #LOCKLPM5,&PM5CTL0       ; Unlock I/O pins
             bis.w	#GIE, SR				; turn on global eables
 
             ; Disable low-power mode
             bic.w   #LOCKLPM5,&PM5CTL0
 
 main:
-
+            jmp i2c_init
             nop 
             jmp main
             nop
@@ -59,13 +64,27 @@ main:
 ;------------------------------------------------------------------------------
 
 i2c_init: 
+        mov.b   #00000101b, &P2OUT     ; send both SDA & SCL high (1)
+        mov.w   &P2OUT, R14
+        mov.w   #03d, R15
+        call    #delay
+        nop
 
 
-i2c_start:
+i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
+        mov.b   #00000001b, &P2OUT    ; put SDA low (0) 
+        mov.w   #03d, R15
+        call    #delay                  ; delay for 25 us
+        mov.b   #00000000b, &P2OUT    ; put SCL low (1)
+        call    #delay
 
-
-i2c_stop:
-
+i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high (0)
+        mov.b   #000000001b, &P2OUT    ; put SCL high (1)
+        mov.w   #03d, R15
+        call    #delay                  ; delay for 25 us 
+        mov.b   #000000101b, &P2OUT    ; put SDA high (1)
+        call    #delay
+        jmp main
 
 i2c_tx_ack:
 
@@ -93,6 +112,11 @@ i2c_write:
 
 i2c_read:
 
+delay:                ; general delay loop for timing (25 us) 
+        ;mov.w   #03d, R15
+        dec.w     R15
+        jnz     delay
+        ret
 
 
 ;------------------------------------------------------------------------------
@@ -102,8 +126,10 @@ i2c_read:
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-tx_byte: 
-            
+slave_address:  .short 00055h   ; makeshift slave address for logic analyzer
+
+
+
 
 ;------------------------------------------------------------------------------
 ; Interrupt Service Routine 
