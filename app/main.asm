@@ -20,10 +20,15 @@ init:
             ; stop watchdog timer
             mov.w   #WDTPW+WDTHOLD,&WDTCTL
 
+setup_Registers
+                 mov.w #0000h, R13              ; setting up R13 to be used for loops 
+                 mov.w #0000h, R14              ; setting up R14 to be used to transmit Bytes
+                 mov.w #0000h, R15              ; setting up R15 to be used for delay      
+
 setup_port2_for_i2c
                 
                 mov.b   #000, &P2SEL0
-                mov.b   #000, &P2SEL0
+                mov.b   #000, &P2SEL1
                 bis.b   #BIT0, &P2DIR           ; Setup P2.0 as SCL Line
                 bic.b   #BIT0, &P2OUT           ; clear P2.0 output
                 
@@ -63,6 +68,7 @@ main:
 ; I2C Subroutines 
 ;------------------------------------------------------------------------------
 
+
 i2c_init: 
         mov.b   #00000101b, &P2OUT     ; send both SDA & SCL high (1)
         mov.w   &P2OUT, R14
@@ -87,12 +93,49 @@ i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high 
         jmp main
 
 i2c_tx_ack:
-
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay
+        bic.b   #BIT2, &P2OUT
+        call    #delay
+        bis.b   #BIT0, &P2OUT
+        call    #delay
 
 i2c_rx_ack:
-
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay
+        bic.b   #BIT2, &P2OUT
+        call    #delay
+        bis.b   #BIT0, &P2OUT
+        call    #delay
 
 i2c_tx_byte:
+        mov.w   #08d, R13               ; run loop 8 times (size of a byte)
+        mov.w   slave_address_tx, R14   ; put the slave address value into R14
+For_tx:
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay   
+        bit.w	#BIT7, R14      	; checking if bit 7 in R14 is set (1)
+        jz      Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
+        jnz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
+
+Set_High_tx:
+                bis.b   #BIT0, &P2OUT   ; setting P2.0 to be HIGH
+                jmp     End_Set_tx
+Set_Low_tx:
+                bic.b   #BIT0, &P2OUT   ; setting P2.0 to be LOW
+                jmp     End_Set_tx
+
+End_Set_tx:
+        rla.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
+        call    #delay
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)  
+        call    #delay
+        dec     R13
+        tst     R13                     ; check to see if Loop is over yet
+        jnz     For_tx
+
+        call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
+        ret
 
 
 i2c_rx_byte:
@@ -126,7 +169,9 @@ delay:                ; general delay loop for timing (25 us)
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-slave_address:  .short 00055h   ; makeshift slave address for logic analyzer
+slave_address_tx:  .short 01101110   ; makeshift slave address for logic analyzer (WRITE) (55h)
+slave_address_rx:  .short 01101111   ; makeshift slave address for logic analyzer (READ) (55h)
+
 
 
 
