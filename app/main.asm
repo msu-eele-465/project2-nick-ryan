@@ -78,9 +78,9 @@ i2c_init:
 
 
 i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
-        mov.b   #00000001b, &P2OUT    ; put SDA low (0) 
+        bic.b   #BIT2, &P2OUT           ; put SDA low (P2.2 -> 0) 
         call    #delay                  ; delay for 25 us
-        mov.b   #00000000b, &P2OUT    ; put SCL low (1)
+        bis.b   #BIT0, &P2OUT           ; put SCL high (P2.0 -> 1)
         call    #delay
         jmp     i2c_tx_byte
 
@@ -110,7 +110,7 @@ i2c_rx_ack:
 
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        mov.w   slave_address_tx, R14   ; put the slave address value into R14
+        mov.b   &02000h, R14            ; put the slave address value into R14
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
@@ -120,10 +120,10 @@ For_tx:
         jnz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
 
 Set_High_tx:
-                bis.b   #BIT2, &P2OUT   ; setting P2.0 to be HIGH
+                bis.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be HIGH
                 jmp     End_Set_tx
 Set_Low_tx:
-                bic.b   #BIT2, &P2OUT   ; setting P2.0 to be LOW
+                bic.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be LOW
                 jmp     End_Set_tx
 
 End_Set_tx:
@@ -174,8 +174,8 @@ delay:                ; general delay loop for timing (25 us)
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-slave_address_tx:  .short 01101110   ; makeshift slave address for logic analyzer (WRITE) (55h)
-slave_address_rx:  .short 01101111   ; makeshift slave address for logic analyzer (READ) (55h)         
+slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (55h)
+slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (55h)         
 
 
 
