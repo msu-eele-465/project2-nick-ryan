@@ -79,14 +79,13 @@ i2c_init:
 
 i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
         mov.b   #00000001b, &P2OUT    ; put SDA low (0) 
-        mov.w   #03d, R15
         call    #delay                  ; delay for 25 us
         mov.b   #00000000b, &P2OUT    ; put SCL low (1)
         call    #delay
+        jmp     i2c_tx_byte
 
 i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high (0)
         mov.b   #000000001b, &P2OUT    ; put SCL high (1)
-        mov.w   #03d, R15
         call    #delay                  ; delay for 25 us 
         mov.b   #000000101b, &P2OUT    ; put SDA high (1)
         call    #delay
@@ -95,17 +94,18 @@ i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high 
 i2c_tx_ack:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
-        bic.b   #BIT2, &P2OUT
+        bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
         call    #delay
-        bis.b   #BIT0, &P2OUT
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
+        jmp     i2c_stop
 
 i2c_rx_ack:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
-        bic.b   #BIT2, &P2OUT
+        bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
         call    #delay
-        bis.b   #BIT0, &P2OUT
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
 
 i2c_tx_byte:
@@ -114,15 +114,16 @@ i2c_tx_byte:
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
+        
         bit.w	#BIT7, R14      	; checking if bit 7 in R14 is set (1)
         jz      Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
         jnz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
 
 Set_High_tx:
-                bis.b   #BIT0, &P2OUT   ; setting P2.0 to be HIGH
+                bis.b   #BIT2, &P2OUT   ; setting P2.0 to be HIGH
                 jmp     End_Set_tx
 Set_Low_tx:
-                bic.b   #BIT0, &P2OUT   ; setting P2.0 to be LOW
+                bic.b   #BIT2, &P2OUT   ; setting P2.0 to be LOW
                 jmp     End_Set_tx
 
 End_Set_tx:
@@ -144,10 +145,14 @@ i2c_rx_byte:
 i2c_send_address:
 
 
-i2c_sdl_delay:
+i2c_sda_delay:                          ; delay for the data line
 
 
-i2c_scl_delay:
+i2c_scl_delay:                          ; delay func for clock line
+        xor.b   #BIT0, &P2OUT
+        call    #delay
+        nop
+        ret
 
 
 i2c_write:
@@ -156,9 +161,9 @@ i2c_write:
 i2c_read:
 
 delay:                ; general delay loop for timing (25 us) 
-        ;mov.w   #03d, R15
         dec.w     R15
         jnz     delay
+        mov.b    #03d, R15      
         ret
 
 
@@ -170,7 +175,7 @@ delay:                ; general delay loop for timing (25 us)
             .retain         ; keep the values 
 
 slave_address_tx:  .short 01101110   ; makeshift slave address for logic analyzer (WRITE) (55h)
-slave_address_rx:  .short 01101111   ; makeshift slave address for logic analyzer (READ) (55h)
+slave_address_rx:  .short 01101111   ; makeshift slave address for logic analyzer (READ) (55h)         
 
 
 
