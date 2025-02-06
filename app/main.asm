@@ -71,8 +71,8 @@ main:
 
 i2c_init: 
         mov.b   #00000101b, &P2OUT     ; send both SDA & SCL high (1)
-        mov.w   &P2OUT, R14
-        mov.w   #03d, R15
+        ;mov.w   &P2OUT, R14
+        mov.w   #06d, R15
         call    #delay
         nop
 
@@ -80,14 +80,14 @@ i2c_init:
 i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
         bic.b   #BIT2, &P2OUT           ; put SDA low (P2.2 -> 0) 
         call    #delay                  ; delay for 25 us
-        bis.b   #BIT0, &P2OUT           ; put SCL high (P2.0 -> 1)
+        bic.b   #BIT0, &P2OUT           ; put SCL high (P2.0 -> 1)
         call    #delay
         jmp     i2c_tx_byte
 
 i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high (0)
-        mov.b   #000000001b, &P2OUT    ; put SCL high (1)
+        bis.b   #BIT0, &P2OUT    ; put SCL high (1)
         call    #delay                  ; delay for 25 us 
-        mov.b   #000000101b, &P2OUT    ; put SDA high (1)
+        bis.b   #BIT2, &P2OUT    ; put SDA high (1)
         call    #delay
         jmp main
 
@@ -110,14 +110,14 @@ i2c_rx_ack:
 
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        mov.b   &02000h, R14            ; put the slave address value into R14
+        mov.b   &slave_address_tx, R14            ; put the slave address value into R14
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
         
         bit.w	#BIT7, R14      	; checking if bit 7 in R14 is set (1)
-        jz      Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
-        jnz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
+        jnz      Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
+        jz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
 
 Set_High_tx:
                 bis.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be HIGH
@@ -162,8 +162,8 @@ i2c_read:
 
 delay:                ; general delay loop for timing (25 us) 
         dec.w     R15
-        jnz     delay
-        mov.b    #03d, R15      
+        jnz       delay
+        mov.b    #06d, R15      
         ret
 
 
@@ -174,8 +174,9 @@ delay:                ; general delay loop for timing (25 us)
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (55h)
-slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (55h)         
+slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (37h)
+seconds_tx:        .short 0000000000000001b   ; makshift seconds to tx
+slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h)         
 
 
 
