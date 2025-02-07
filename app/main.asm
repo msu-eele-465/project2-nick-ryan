@@ -98,6 +98,9 @@ i2c_tx_ack:
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
+        call    #delay
+        bis.b   #BIT0, &P2OUT
         jmp     i2c_stop
 
 i2c_rx_ack:
@@ -110,14 +113,14 @@ i2c_rx_ack:
 
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        mov.b   &slave_address_tx, R14            ; put the slave address value into R14
+        mov.b   &slave_address_tx, R14  ; put the slave address value into R14
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
         
         bit.w	#BIT7, R14      	; checking if bit 7 in R14 is set (1)
-        jnz      Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
-        jz     Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
+        jnz     Set_High_tx             ; Z will be set to 0 if bit 7 IS a 1
+        jz      Set_Low_tx              ; z will be set to 1 if bit 7 IS NOT a 1
 
 Set_High_tx:
                 bis.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be HIGH
@@ -155,7 +158,7 @@ i2c_scl_delay:                          ; delay func for clock line
         ret
 
 
-i2c_write:
+i2c_write:              ; dont think we need this, could implement the auto inc in tx_byte
 
 
 i2c_read:
@@ -174,9 +177,17 @@ delay:                ; general delay loop for timing (25 us)
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (37h)
-seconds_tx:        .short 0000000000000001b   ; makshift seconds to tx
-slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h)         
+slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (37h) (mem-addr = 0x002000)
+seconds_tx:        .short 0000000000000001b   ; makshift seconds to tx (val = 1)      (mem-addr = 0x02002)
+minuts_tx:         .short 0000000000000010b   ; makeshift minutes to tx (val = 2)     (mem-addr = 0x02004)
+hours_tx:          .short 0000000000000011b   ; makeshift hours to tx (val = 3)       (mem-addr = 0x02006)
+days_tx:           .short 0000000000000100b   ; makeshift days to tx (val = 4)        (mem-addr = 0x02008)
+weekdays_tx:       .short 0000000000000101b   ; makeshift weekdays to tx (val = 5)    (mem-addr = 0x0200A)
+months_tx:         .short 0000000000000110b   ; makeshift months to tx (val = 6)      (mem-addr = 0x0200C)
+years_tx:          .short 0000000000000111b   ; makeshift years to tx (val = 7)       (mem-addr = 0x0200E)
+
+slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h) 
+; we probably want to have space saved in memory for our recieved bites
 
 
 
