@@ -21,9 +21,10 @@ init:
             mov.w   #WDTPW+WDTHOLD,&WDTCTL
 
 setup_Registers
-                 mov.w #0000h, R13              ; setting up R13 to be used for loops 
-                 mov.w #0000h, R14              ; setting up R14 to be used to transmit Bytes
-                 mov.w #0000h, R15              ; setting up R15 to be used for delay      
+                mov.w #0000h, R12              ; setting up R12 to be used for storing addr data
+                mov.w #0000h, R13              ; setting up R13 to be used for loops 
+                mov.w #0000h, R14              ; setting up R14 to be used to transmit Bytes
+                mov.w #0000h, R15              ; setting up R15 to be used for delay      
 
 setup_port2_for_i2c
                 
@@ -52,14 +53,18 @@ setup_timer_B0
 
 
             ;bic.w   #LOCKLPM5,&PM5CTL0       ; Unlock I/O pins
-            bis.w	#GIE, SR				; turn on global eables
+            bis.w	#GIE, SR				; turn on global enables
 
             ; Disable low-power mode
             bic.w   #LOCKLPM5,&PM5CTL0
 
 main:
-            jmp i2c_init
+            call #i2c_init
             nop 
+            call #i2c_send_address
+            call #i2c_tx_ack
+            call #i2c_tx_byte
+            call #i2c_stop
             jmp main
             nop
 
@@ -82,14 +87,16 @@ i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
         call    #delay                  ; delay for 25 us
         bic.b   #BIT0, &P2OUT           ; put SCL high (P2.0 -> 1)
         call    #delay
-        jmp     i2c_tx_byte
+        ret 
+        jmp     i2c_send_address
 
 i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high (0)
         bis.b   #BIT0, &P2OUT    ; put SCL high (1)
         call    #delay           ; delay for 25 us 
         bis.b   #BIT2, &P2OUT    ; put SDA high (1)
         call    #delay
-        jmp main
+        ret
+        ;jmp     return_to_main
 
 i2c_tx_ack:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
@@ -98,16 +105,11 @@ i2c_tx_ack:
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
-<<<<<<< HEAD
-        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
-        call    #delay
-        bis.b   #BIT0, &P2OUT
-=======
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
->>>>>>> de8d747bbebe7c01f87576356b29a7dffdd21c83
-        jmp     i2c_stop
+        ret
+        ;jmp     i2c_stop
 
 i2c_rx_ack:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
@@ -117,18 +119,13 @@ i2c_rx_ack:
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
 
-;---------------------------------------------------------------------------------------------------
-;-------------- I2C SENDING BYTES --------------------
-;---------------------------------------------------------------------------------------------------
 
-
+;---------------------------------------------------------------------------------------------------
+;---------------- I2C SENDING BYTES --------------------
+;---------------------------------------------------------------------------------------------------
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-<<<<<<< HEAD
-        mov.b   &slave_address_tx, R14  ; put the slave address value into R14
-=======
-        mov.b   &slave_address_tx, R14  ; put the slave address value into R14  --------------- update this to increment address from 2000h memory
->>>>>>> de8d747bbebe7c01f87576356b29a7dffdd21c83
+        mov.b   @R12+, R14              ; R12 is already initialized to the first set of data
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
@@ -153,6 +150,7 @@ End_Set_tx:
         tst     R13                     ; check to see if Loop is over yet
         jnz     For_tx
 
+        ret
         call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
         ret
 ;---------------------------- I2C SENDING BYTES END ------------------------------------------------
@@ -160,12 +158,15 @@ End_Set_tx:
 
 i2c_rx_byte:
 
+
 ;---------------------------------------------------------------------------------------------------
 ;-------------- I2C SENDING ADDRESS --------------------
 ;---------------------------------------------------------------------------------------------------
 
-
 i2c_send_address:
+        mov.w   #08d, R13               ; run loop 8 times (size of a byte)
+        mov.w   #slave_address_tx, R12  ; put the slave_address address location into R12 (2000h)
+        mov.w   @R12+, R14               ; put the value at the memory location in R12 into R14, and increment R12's value
 
 For_addr:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
@@ -191,9 +192,9 @@ End_Set_addr:
         tst     R13                     ; check to see if Loop is over yet
         jnz     For_addr
 
-        call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
         ret
-
+        ;jmp     i2c_tx_ack             ; create ACK signal at the end of transmitting
+;---------------------------- I2C SENDING ADDRESS END ------------------------------------------------
 
 
 
@@ -218,6 +219,9 @@ delay:                ; general delay loop for timing (25 us)
         mov.b    #06d, R15      
         ret
 
+return_to_main:
+        ret
+
 
 ;------------------------------------------------------------------------------
 ; Data / Values 
@@ -226,7 +230,7 @@ delay:                ; general delay loop for timing (25 us)
             .data           ; save values in data segment memory 
             .retain         ; keep the values 
 
-slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) (37h) (mem-addr = 0x002000)
+slave_address_tx:  .short 0000000001101110b   ; makeshift slave address for logic analyzer (WRITE) ([37h][0]) (mem-addr = 0x002000)
 seconds_tx:        .short 0000000000000001b   ; makshift seconds to tx (val = 1)      (mem-addr = 0x02002)
 minuts_tx:         .short 0000000000000010b   ; makeshift minutes to tx (val = 2)     (mem-addr = 0x02004)
 hours_tx:          .short 0000000000000011b   ; makeshift hours to tx (val = 3)       (mem-addr = 0x02006)
@@ -236,7 +240,7 @@ months_tx:         .short 0000000000000110b   ; makeshift months to tx (val = 6)
 years_tx:          .short 0000000000000111b   ; makeshift years to tx (val = 7)       (mem-addr = 0x0200E)
 
 slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h) 
-; we probably want to have space saved in memory for our recieved bites
+; we probably want to have space saved in memory for our recieved bytes
 
 
 
