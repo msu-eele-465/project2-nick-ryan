@@ -86,7 +86,7 @@ i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
 
 i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high (0)
         bis.b   #BIT0, &P2OUT    ; put SCL high (1)
-        call    #delay                  ; delay for 25 us 
+        call    #delay           ; delay for 25 us 
         bis.b   #BIT2, &P2OUT    ; put SDA high (1)
         call    #delay
         jmp main
@@ -98,9 +98,15 @@ i2c_tx_ack:
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
+<<<<<<< HEAD
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
         bis.b   #BIT0, &P2OUT
+=======
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
+>>>>>>> de8d747bbebe7c01f87576356b29a7dffdd21c83
         jmp     i2c_stop
 
 i2c_rx_ack:
@@ -111,9 +117,18 @@ i2c_rx_ack:
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
 
+;---------------------------------------------------------------------------------------------------
+;-------------- I2C SENDING BYTES --------------------
+;---------------------------------------------------------------------------------------------------
+
+
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
+<<<<<<< HEAD
         mov.b   &slave_address_tx, R14  ; put the slave address value into R14
+=======
+        mov.b   &slave_address_tx, R14  ; put the slave address value into R14  --------------- update this to increment address from 2000h memory
+>>>>>>> de8d747bbebe7c01f87576356b29a7dffdd21c83
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
@@ -140,12 +155,46 @@ End_Set_tx:
 
         call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
         ret
+;---------------------------- I2C SENDING BYTES END ------------------------------------------------
 
 
 i2c_rx_byte:
 
+;---------------------------------------------------------------------------------------------------
+;-------------- I2C SENDING ADDRESS --------------------
+;---------------------------------------------------------------------------------------------------
+
 
 i2c_send_address:
+
+For_addr:
+        bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay   
+        
+        bit.w	#BIT7, R14      	; checking if bit 7 in R14 is set (1)
+        jnz     Set_High_addr           ; Z will be set to 0 if bit 7 IS a 1
+        jz      Set_Low_addr            ; z will be set to 1 if bit 7 IS NOT a 1
+
+Set_High_addr:
+                bis.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be HIGH
+                jmp     End_Set_addr
+Set_Low_addr:
+                bic.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be LOW
+                jmp     End_Set_addr
+
+End_Set_addr:
+        rla.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
+        call    #delay
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)  
+        call    #delay
+        dec     R13
+        tst     R13                     ; check to see if Loop is over yet
+        jnz     For_addr
+
+        call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
+        ret
+
+
 
 
 i2c_sda_delay:                          ; delay for the data line
