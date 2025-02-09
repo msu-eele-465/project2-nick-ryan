@@ -64,7 +64,15 @@ main:
             call #i2c_send_address
             call #i2c_tx_ack
             call #i2c_tx_byte
+            call #i2c_tx_byte
+            call #i2c_tx_byte
+            call #i2c_tx_byte
+            call #i2c_tx_byte
+            call #i2c_tx_byte
+            call #i2c_tx_byte
             call #i2c_stop
+
+            call #i2c_send_rx_address
             jmp main
             nop
 
@@ -125,7 +133,9 @@ i2c_rx_ack:
 ;---------------------------------------------------------------------------------------------------
 i2c_tx_byte:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        mov.b   @R12+, R14              ; R12 is already initialized to the first set of data
+        mov.b   @R12, R14              ; R12 is already initialized to the first set of data
+        inc     R12
+        inc     R12
 For_tx:
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay   
@@ -155,8 +165,32 @@ End_Set_tx:
         ret
 ;---------------------------- I2C SENDING BYTES END ------------------------------------------------
 
+i2c_send_rx_address: 
+        mov.w   #08d, R13
+        mov.w   #slave_address_rx, R12
+        mov.w   @R12, R14
+        inc     R12
+        inc     R12
 
-i2c_rx_byte:
+
+i2c_rx_byte:            
+        ; reconfiguring P2.2 (SDA) for input instead of output
+        bic.b   #BIT2, &P2DIR           ; set P2.2 (SDA) as input
+        bis.b   #BIT2, &P2REN           ; enable pull up / down resistors
+        bis.b   #BIT2, &P2OUT           ; give pull up resistor
+
+        mov.w   #08d, R13               ; run loop 8 times (size of a byte)
+        ;mov.b   @R12, R14              ; R12 is already initialized to the first set of data
+        ;inc     R12
+        ;inc     R12
+        call    #For_addr
+        ret
+
+
+
+
+
+
 
 
 ;---------------------------------------------------------------------------------------------------
@@ -241,6 +275,15 @@ years_tx:          .short 0000000000000111b   ; makeshift years to tx (val = 7) 
 
 slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h) 
 ; we probably want to have space saved in memory for our recieved bytes
+
+; space saved for received values
+seconds_rx:     .space 2
+minuts_rx:      .space 2
+hours_rx:       .space 2
+days_rx:        .space 2
+weekdays_rx:    .space 2
+months_rx:      .space 2
+years_rx:       .space 2
 
 
 
