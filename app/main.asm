@@ -72,7 +72,7 @@ main:
             call #i2c_tx_byte
             call #i2c_stop
 
-            call #i2c_send_rx_address
+            ;call #i2c_send_rx_address
             jmp main
             nop
 
@@ -115,7 +115,8 @@ i2c_tx_ack:
         call    #delay
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
-        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
+        ;bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
+        ;call    #delay
         ret
         ;jmp     i2c_stop
 
