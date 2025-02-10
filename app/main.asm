@@ -31,8 +31,8 @@ setup_port2_for_i2c
                 mov.b   #000, &P2SEL0
                 mov.b   #000, &P2SEL1
                 bis.b   #BIT0, &P2DIR           ; Setup P2.0 as SCL Line
-                bic.b   #BIT0, &P2OUT           ; clear P2.0 output
-                
+                bic.b   #BIT0, &P2OUT          ; clear P2.0 output
+                 
                 mov.b   #000, &P2SEL0
                 mov.b   #000, &P2SEL1
                 bis.b   #BIT2, &P2DIR           ; Setup P2.2 as SDA Line
@@ -62,7 +62,7 @@ main:
             call #i2c_init
             nop 
             call #i2c_send_address
-            call #i2c_tx_ack
+            ;call #i2c_tx_ack
             call #i2c_tx_byte
             call #i2c_tx_byte
             call #i2c_tx_byte
@@ -70,8 +70,9 @@ main:
             call #i2c_tx_byte
             call #i2c_tx_byte
             call #i2c_tx_byte
+            ;call #i2c_tx_ack
             call #i2c_stop
-
+            call #delay
             ;call #i2c_send_rx_address
             jmp main
             nop
@@ -103,13 +104,17 @@ i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high 
         call    #delay           ; delay for 25 us 
         bis.b   #BIT2, &P2OUT    ; put SDA high (1)
         call    #delay
+        call    #delay
         ret
         ;jmp     return_to_main
 
 i2c_tx_ack:
+        bic.b   #BIT2, &P2DIR           ; set P2.2 (SDA) as input
+        bis.b   #BIT2, &P2REN           ; enable pull up / down resistors
+        bis.b   #BIT2, &P2OUT           ; give pull up resistor
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
-        bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
+        ;bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
@@ -133,6 +138,11 @@ i2c_rx_ack:
 ;---------------- I2C SENDING BYTES --------------------
 ;---------------------------------------------------------------------------------------------------
 i2c_tx_byte:
+        mov.b   #000, &P2SEL0
+        mov.b   #000, &P2SEL1
+        bis.b   #BIT2, &P2DIR           ; Setup P2.2 as SDA Line
+        bic.b   #BIT2, &P2OUT           ; clear P2.2 output
+        
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
         mov.b   @R12, R14              ; R12 is already initialized to the first set of data
         inc     R12
@@ -147,21 +157,22 @@ For_tx:
 
 Set_High_tx:
                 bis.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be HIGH
+                call    #delay
                 jmp     End_Set_tx
 Set_Low_tx:
                 bic.b   #BIT2, &P2OUT   ; setting SDA (P2.2) to be LOW
                 jmp     End_Set_tx
 
 End_Set_tx:
-        rla.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
+        rlc.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)  
         call    #delay
         dec     R13
         tst     R13                     ; check to see if Loop is over yet
+        
         jnz     For_tx
 
-        ret
         call    #i2c_tx_ack             ; create ACK signal at the end of transmitting
         ret
 ;---------------------------- I2C SENDING BYTES END ------------------------------------------------
@@ -172,6 +183,7 @@ i2c_send_rx_address:
         mov.w   @R12, R14
         inc     R12
         inc     R12
+        jmp     i2c_rx_byte
 
 
 i2c_rx_byte:            
@@ -181,9 +193,6 @@ i2c_rx_byte:
         bis.b   #BIT2, &P2OUT           ; give pull up resistor
 
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        ;mov.b   @R12, R14              ; R12 is already initialized to the first set of data
-        ;inc     R12
-        ;inc     R12
         call    #For_addr
         ret
 
@@ -225,6 +234,7 @@ End_Set_addr:
         call    #delay
         dec     R13
         tst     R13                     ; check to see if Loop is over yet
+       
         jnz     For_addr
 
         ret
@@ -274,17 +284,18 @@ weekdays_tx:       .short 0000000000000101b   ; makeshift weekdays to tx (val = 
 months_tx:         .short 0000000000000110b   ; makeshift months to tx (val = 6)      (mem-addr = 0x0200C)
 years_tx:          .short 0000000000000111b   ; makeshift years to tx (val = 7)       (mem-addr = 0x0200E)
 
+;extra_space:       .space 2
 slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logic analyzer (READ) (37h) 
 ; we probably want to have space saved in memory for our recieved bytes
 
 ; space saved for received values
-seconds_rx:     .space 2
-minuts_rx:      .space 2
-hours_rx:       .space 2
-days_rx:        .space 2
-weekdays_rx:    .space 2
-months_rx:      .space 2
-years_rx:       .space 2
+;seconds_rx:     .space 2
+;minuts_rx:      .space 2
+;hours_rx:       .space 2
+;days_rx:        .space 2
+;weekdays_rx:    .space 2
+;months_rx:      .space 2
+;years_rx:       .space 2
 
 
 
