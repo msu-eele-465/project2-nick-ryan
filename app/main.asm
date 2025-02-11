@@ -21,6 +21,7 @@ init:
             mov.w   #WDTPW+WDTHOLD,&WDTCTL
 
 setup_Registers
+                mov.w #0000h, R11              ; setting up R11 as an input register for reading bytes
                 mov.w #0000h, R12              ; setting up R12 to be used for storing addr data
                 mov.w #0000h, R13              ; setting up R13 to be used for loops 
                 mov.w #0000h, R14              ; setting up R14 to be used to transmit Bytes
@@ -59,10 +60,9 @@ setup_timer_B0
             bic.w   #LOCKLPM5,&PM5CTL0
 
 main:
-            call #i2c_init
-            nop 
+            call #i2c_init 
             call #i2c_send_address
-            ;call #i2c_tx_ack
+            call #i2c_tx_ack
             call #i2c_tx_byte
             call #i2c_tx_byte
             call #i2c_tx_byte
@@ -70,10 +70,14 @@ main:
             call #i2c_tx_byte
             call #i2c_tx_byte
             call #i2c_tx_byte
-            ;call #i2c_tx_ack
             call #i2c_stop
             call #delay
-            ;call #i2c_send_rx_address
+            call #i2c_init
+            call #i2c_send_rx_address
+            call #i2c_tx_ack
+            call #i2c_rx_byte
+            call #i2c_rx_byte
+            call #i2c_rx_byte
             jmp main
             nop
 
@@ -94,7 +98,7 @@ i2c_init:
 i2c_start:              ; send SDA low (0), hold for 25 us then send SCL low (0)
         bic.b   #BIT2, &P2OUT           ; put SDA low (P2.2 -> 0) 
         call    #delay                  ; delay for 25 us
-        bic.b   #BIT0, &P2OUT           ; put SCL high (P2.0 -> 1)
+        bic.b   #BIT0, &P2OUT           ; put SCL low (P2.0 -> 0)
         call    #delay
         ret 
         jmp     i2c_send_address
@@ -109,16 +113,23 @@ i2c_stop:               ; send SCL high (1), hold for 25 us, then send SDA high 
         ;jmp     return_to_main
 
 i2c_tx_ack:
-        bic.b   #BIT2, &P2DIR           ; set P2.2 (SDA) as input
-        bis.b   #BIT2, &P2REN           ; enable pull up / down resistors
-        bis.b   #BIT2, &P2OUT           ; give pull up resistor
+        
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
-        ;bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
+
+        bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
+        bic.b   #BIT2, &P2DIR           ; set P2.2 (SDA) as input
+        bis.b   #BIT2, &P2REN           ; enable pull up / down resistors
+        ;bis.b   #BIT2, &P2OUT           ; give pull up resistor   | NO CLUE WHY BUT PULL UP RESISTER BROKE IT
+
+        mov.b P2IN, R11
+
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+        call    #delay
+        call    #delay
         call    #delay
         ;bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         ;call    #delay
@@ -126,23 +137,30 @@ i2c_tx_ack:
         ;jmp     i2c_stop
 
 i2c_rx_ack:
+       
         bic.b   #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
         call    #delay
+
+        ; REGAIN control of P2.2
+        bis.b   #BIT2, &P2DIR           ; Setup P2.2 (SDA) as output
+        bic.b   #BIT2, &P2OUT           ; clear P2.2 output
+        
         bic.b   #BIT2, &P2OUT           ; put SDA (P2.2) low (0)
         call    #delay
+
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)
         call    #delay
+        ret
 
 
 ;---------------------------------------------------------------------------------------------------
 ;---------------- I2C SENDING BYTES --------------------
 ;---------------------------------------------------------------------------------------------------
 i2c_tx_byte:
-        mov.b   #000, &P2SEL0
-        mov.b   #000, &P2SEL1
-        bis.b   #BIT2, &P2DIR           ; Setup P2.2 as SDA Line
-        bic.b   #BIT2, &P2OUT           ; clear P2.2 output
         
+        bis.b   #BIT2, &P2DIR           ; Setup P2.2 (SDA) as output
+        bic.b   #BIT2, &P2OUT           ; clear P2.2 output
+
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
         mov.b   @R12, R14              ; R12 is already initialized to the first set of data
         inc     R12
@@ -164,7 +182,7 @@ Set_Low_tx:
                 jmp     End_Set_tx
 
 End_Set_tx:
-        rlc.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
+        rla.w   R14                     ; because rotating word, R14 has 16 bits of storage, so no need for rlc
         call    #delay
         bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)  
         call    #delay
@@ -177,35 +195,71 @@ End_Set_tx:
         ret
 ;---------------------------- I2C SENDING BYTES END ------------------------------------------------
 
-i2c_send_rx_address: 
-        mov.w   #08d, R13
-        mov.w   #slave_address_rx, R12
-        mov.w   @R12, R14
-        inc     R12
-        inc     R12
-        jmp     i2c_rx_byte
 
+;---------------------------------------------------------------------------------------------------
+;---------------- I2C RECEIVING BYTES --------------------
+;---------------------------------------------------------------------------------------------------
 
 i2c_rx_byte:            
         ; reconfiguring P2.2 (SDA) for input instead of output
+        mov.w   #0000h, R11             ; clearing R11
+
         bic.b   #BIT2, &P2DIR           ; set P2.2 (SDA) as input
         bis.b   #BIT2, &P2REN           ; enable pull up / down resistors
-        bis.b   #BIT2, &P2OUT           ; give pull up resistor
+        ;bis.b   #BIT2, &P2OUT           ; give pull up resistor
 
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
-        call    #For_addr
+        inc     R12
+        inc     R12
+
+For_rx:
+       bic.b    #BIT0, &P2OUT           ; put SCL (P2.0) low (0)
+       call     #delay
+
+       mov.b    P2IN, R10
+       bit.w    #BIT2, R10             ; checking if P2.2 (SDA) is high or low
+       jnz      Set_High_rx
+       jz       Set_Low_rx
+
+Set_High_rx:
+                bis.b   #BIT0, R11      ; setting R11 to be HIGH based on input from P2.2 (SDA)
+                call    #delay
+                jmp     End_Set_rx
+Set_Low_rx:
+                bic.b   #BIT0, R11      ; setting R11 to be Low based on input from P2.2 (SDA)
+                jmp     End_Set_rx
+
+End_Set_rx:
+        rla.w   R11                     ; because rotating word, R11 has 16 bits of storage, so no need for rlc
+        call    #delay
+        bis.b   #BIT0, &P2OUT           ; put SCL (P2.0) high (1)  
+        call    #delay
+        dec     R13
+        tst     R13                     ; check to see if Loop is over yet
+        
+        jnz     For_rx
+
+        rra.w   R11
+        mov.w   R11, 1(R12)
+
+        call    #i2c_rx_ack             ; create ACK signal at the end of transmitting
         ret
 
-
-
-
-
+;---------------------------- I2C RECEIVING BYTES END ------------------------------------------------
 
 
 
 ;---------------------------------------------------------------------------------------------------
 ;-------------- I2C SENDING ADDRESS --------------------
 ;---------------------------------------------------------------------------------------------------
+i2c_send_rx_address: 
+        mov.w   #08d, R13
+        mov.w   #slave_address_rx, R12
+        mov.w   @R12, R14
+        ;inc     R12
+        ;inc     R12
+        jmp     For_addr       ; use pre defined loops from sending the WRITE address
+        ret
 
 i2c_send_address:
         mov.w   #08d, R13               ; run loop 8 times (size of a byte)
@@ -289,13 +343,13 @@ slave_address_rx:  .short 0000000001101111b   ; makeshift slave address for logi
 ; we probably want to have space saved in memory for our recieved bytes
 
 ; space saved for received values
-;seconds_rx:     .space 2
-;minuts_rx:      .space 2
-;hours_rx:       .space 2
-;days_rx:        .space 2
-;weekdays_rx:    .space 2
-;months_rx:      .space 2
-;years_rx:       .space 2
+seconds_rx:     .space 2
+minuts_rx:      .space 2
+hours_rx:       .space 2
+days_rx:        .space 2
+weekdays_rx:    .space 2
+months_rx:      .space 2
+years_rx:       .space 2
 
 
 
